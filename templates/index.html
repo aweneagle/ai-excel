@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel 智能助手</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 24px;
+            color: #1a1a2e;
+        }
+        .panel {
+            background: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        .panel-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Command input */
+        .command-row {
+            display: flex;
+            gap: 10px;
+        }
+        .command-row input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1.5px solid #ddd;
+            border-radius: 8px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .command-row input:focus { border-color: #4f6ef7; }
+        .btn {
+            padding: 10px 22px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-primary {
+            background: #4f6ef7;
+            color: #fff;
+        }
+        .btn-primary:hover { background: #3d5bd9; }
+        .btn-primary:disabled {
+            background: #a0b0e8;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background: #e8ecf1;
+            color: #333;
+        }
+        .btn-secondary:hover { background: #d4dae3; }
+        .btn-danger {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        .btn-danger:hover { background: #fecaca; }
+        .btn-sm {
+            padding: 6px 14px;
+            font-size: 13px;
+        }
+
+        /* Upload area */
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 32px;
+            text-align: center;
+            color: #888;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .upload-area:hover, .upload-area.dragover {
+            border-color: #4f6ef7;
+            background: #f0f4ff;
+            color: #4f6ef7;
+        }
+        .upload-area input { display: none; }
+
+        /* File list */
+        .file-section { margin-bottom: 16px; }
+        .file-section:last-child { margin-bottom: 0; }
+        .file-section h3 {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+        .file-list { list-style: none; }
+        .file-list li {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: background 0.15s;
+        }
+        .file-list li:hover { background: #f5f7fa; }
+        .file-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .file-actions {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        /* Result area */
+        .result-box {
+            background: #f8f9fb;
+            border: 1px solid #e2e6ec;
+            border-radius: 8px;
+            padding: 16px;
+            display: none;
+        }
+        .result-box.visible { display: block; }
+        .result-message {
+            font-size: 14px;
+            margin-bottom: 12px;
+            padding: 10px 14px;
+            border-radius: 6px;
+        }
+        .result-message.success { background: #e8f5e9; color: #2e7d32; }
+        .result-message.error { background: #fce4ec; color: #c62828; }
+        .code-block {
+            background: #1e1e2e;
+            color: #cdd6f4;
+            border-radius: 8px;
+            padding: 16px;
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .code-toggle {
+            font-size: 13px;
+            color: #4f6ef7;
+            cursor: pointer;
+            margin-bottom: 8px;
+            user-select: none;
+        }
+
+        /* Preview modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-overlay.visible { display: flex; }
+        .modal {
+            background: #fff;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 90vw;
+            max-height: 80vh;
+            overflow: auto;
+            min-width: 500px;
+        }
+        .modal h2 {
+            font-size: 18px;
+            margin-bottom: 16px;
+        }
+        .modal table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .modal th, .modal td {
+            border: 1px solid #e2e6ec;
+            padding: 8px 10px;
+            text-align: left;
+        }
+        .modal th {
+            background: #f5f7fa;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+        .modal .close-btn {
+            float: right;
+            font-size: 20px;
+            cursor: pointer;
+            color: #888;
+            border: none;
+            background: none;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid #ccc;
+            border-top-color: #4f6ef7;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .two-col { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Excel 智能助手</h1>
+
+        <!-- Command -->
+        <div class="panel">
+            <div class="panel-title">输入指令</div>
+            <div class="command-row">
+                <input type="text" id="commandInput"
+                    placeholder="例如：过滤员工表里薪资大于20000的记录"
+                    autocomplete="off">
+                <button class="btn btn-primary" id="executeBtn" onclick="executeCommand()">执行</button>
+            </div>
+        </div>
+
+        <div class="two-col">
+            <!-- Upload -->
+            <div class="panel">
+                <div class="panel-title">上传文件</div>
+                <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+                    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple onchange="uploadFiles(this.files)">
+                    <p>点击或拖拽文件到此处上传</p>
+                    <p style="font-size:12px; margin-top:6px;">支持 .xlsx .xls .csv</p>
+                </div>
+            </div>
+
+            <!-- File list -->
+            <div class="panel">
+                <div class="panel-title">文件管理</div>
+                <div id="fileListContainer">
+                    <p style="color:#aaa; font-size:14px;">加载中...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Result -->
+        <div class="panel">
+            <div class="panel-title">执行结果</div>
+            <div class="result-box" id="resultBox">
+                <div class="result-message" id="resultMessage"></div>
+                <div class="code-toggle" id="codeToggle" onclick="toggleCode()">▶ 查看生成的代码</div>
+                <div class="code-block" id="codeBlock" style="display:none;"></div>
+            </div>
+            <div id="resultPlaceholder" style="color:#aaa; font-size:14px;">等待执行指令...</div>
+        </div>
+    </div>
+
+    <!-- Preview modal -->
+    <div class="modal-overlay" id="previewModal">
+        <div class="modal">
+            <button class="close-btn" onclick="closePreview()">&times;</button>
+            <h2 id="previewTitle">文件预览</h2>
+            <div id="previewContent"></div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", loadFiles);
+
+        document.getElementById("commandInput").addEventListener("keydown", (e) => {
+            if (e.key === "Enter") executeCommand();
+        });
+
+        const uploadArea = document.getElementById("uploadArea");
+        uploadArea.addEventListener("dragover", (e) => { e.preventDefault(); uploadArea.classList.add("dragover"); });
+        uploadArea.addEventListener("dragleave", () => uploadArea.classList.remove("dragover"));
+        uploadArea.addEventListener("drop", (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove("dragover");
+            uploadFiles(e.dataTransfer.files);
+        });
+
+        async function loadFiles() {
+            const resp = await fetch("/api/files");
+            const data = await resp.json();
+            const container = document.getElementById("fileListContainer");
+
+            let html = "";
+            if (data.inputs.length > 0) {
+                html += '<div class="file-section"><h3>📂 inputs/</h3><ul class="file-list">';
+                data.inputs.forEach(f => {
+                    html += `<li>
+                        <span class="file-name">${esc(f)}</span>
+                        <div class="file-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="previewFile('inputs','${esc(f)}')">预览</button>
+                            <a class="btn btn-secondary btn-sm" href="/api/download/inputs/${encodeURIComponent(f)}" style="text-decoration:none;">下载</a>
+                            <button class="btn btn-danger btn-sm" onclick="deleteFile('inputs','${esc(f)}')">删除</button>
+                        </div>
+                    </li>`;
+                });
+                html += "</ul></div>";
+            }
+            if (data.outputs.length > 0) {
+                html += '<div class="file-section"><h3>📂 outputs/</h3><ul class="file-list">';
+                data.outputs.forEach(f => {
+                    html += `<li>
+                        <span class="file-name">${esc(f)}</span>
+                        <div class="file-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="previewFile('outputs','${esc(f)}')">预览</button>
+                            <a class="btn btn-secondary btn-sm" href="/api/download/outputs/${encodeURIComponent(f)}" style="text-decoration:none;">下载</a>
+                            <button class="btn btn-danger btn-sm" onclick="deleteFile('outputs','${esc(f)}')">删除</button>
+                        </div>
+                    </li>`;
+                });
+                html += "</ul></div>";
+            }
+            if (!data.inputs.length && !data.outputs.length) {
+                html = '<p style="color:#aaa; font-size:14px;">暂无文件，请先上传</p>';
+            }
+            container.innerHTML = html;
+        }
+
+        async function uploadFiles(files) {
+            for (const file of files) {
+                const fd = new FormData();
+                fd.append("file", file);
+                const resp = await fetch("/api/upload", { method: "POST", body: fd });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    alert(data.error || "上传失败");
+                }
+            }
+            loadFiles();
+        }
+
+        async function executeCommand() {
+            const input = document.getElementById("commandInput");
+            const btn = document.getElementById("executeBtn");
+            const command = input.value.trim();
+            if (!command) return;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading"></span>执行中...';
+
+            const resultBox = document.getElementById("resultBox");
+            const resultMsg = document.getElementById("resultMessage");
+            const codeBlock = document.getElementById("codeBlock");
+            const codeToggle = document.getElementById("codeToggle");
+            document.getElementById("resultPlaceholder").style.display = "none";
+            resultBox.classList.add("visible");
+            resultMsg.textContent = "正在调用 AI 生成代码并执行...";
+            resultMsg.className = "result-message";
+            codeBlock.style.display = "none";
+            codeToggle.textContent = "▶ 查看生成的代码";
+
+            try {
+                const resp = await fetch("/api/execute", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ command }),
+                });
+                const data = await resp.json();
+
+                if (resp.ok) {
+                    resultMsg.textContent = "✅ " + (data.result || data.message);
+                    resultMsg.className = "result-message success";
+                } else {
+                    resultMsg.textContent = "❌ " + (data.error || "执行失败");
+                    resultMsg.className = "result-message error";
+                }
+                if (data.code) {
+                    codeBlock.textContent = data.code;
+                    codeToggle.style.display = "block";
+                } else {
+                    codeToggle.style.display = "none";
+                }
+            } catch (e) {
+                resultMsg.textContent = "❌ 请求失败: " + e.message;
+                resultMsg.className = "result-message error";
+                codeToggle.style.display = "none";
+            }
+
+            btn.disabled = false;
+            btn.textContent = "执行";
+            loadFiles();
+        }
+
+        function toggleCode() {
+            const block = document.getElementById("codeBlock");
+            const toggle = document.getElementById("codeToggle");
+            if (block.style.display === "none") {
+                block.style.display = "block";
+                toggle.textContent = "▼ 隐藏代码";
+            } else {
+                block.style.display = "none";
+                toggle.textContent = "▶ 查看生成的代码";
+            }
+        }
+
+        async function deleteFile(folder, filename) {
+            if (!confirm(`确定要删除 ${filename} 吗？`)) return;
+            const resp = await fetch(`/api/delete/${folder}/${encodeURIComponent(filename)}`, { method: "DELETE" });
+            const data = await resp.json();
+            if (!resp.ok) alert(data.error || "删除失败");
+            loadFiles();
+        }
+
+        async function previewFile(folder, filename) {
+            const modal = document.getElementById("previewModal");
+            const title = document.getElementById("previewTitle");
+            const content = document.getElementById("previewContent");
+            title.textContent = `预览: ${filename}`;
+            content.innerHTML = "<p>加载中...</p>";
+            modal.classList.add("visible");
+
+            try {
+                const resp = await fetch(`/api/preview/${folder}/${encodeURIComponent(filename)}`);
+                const data = await resp.json();
+                if (data.error) {
+                    content.innerHTML = `<p style="color:red">${esc(data.error)}</p>`;
+                    return;
+                }
+                let html = `<p style="font-size:12px;color:#888;margin-bottom:10px;">显示前 ${data.rows.length} 行，共 ${data.shape[0]} 行 x ${data.shape[1]} 列</p>`;
+                html += "<table><thead><tr>";
+                data.columns.forEach(c => html += `<th>${esc(String(c))}</th>`);
+                html += "</tr></thead><tbody>";
+                data.rows.forEach(row => {
+                    html += "<tr>";
+                    row.forEach(cell => html += `<td>${esc(String(cell))}</td>`);
+                    html += "</tr>";
+                });
+                html += "</tbody></table>";
+                content.innerHTML = html;
+            } catch (e) {
+                content.innerHTML = `<p style="color:red">加载失败: ${esc(e.message)}</p>`;
+            }
+        }
+
+        function closePreview() {
+            document.getElementById("previewModal").classList.remove("visible");
+        }
+
+        document.getElementById("previewModal").addEventListener("click", (e) => {
+            if (e.target === e.currentTarget) closePreview();
+        });
+
+        function esc(s) {
+            const d = document.createElement("div");
+            d.textContent = s;
+            return d.innerHTML;
+        }
+    </script>
+</body>
+</html>
