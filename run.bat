@@ -1,11 +1,10 @@
 @echo off
-chcp 65001 >nul
 
 if not exist venv (
-    echo 创建虚拟环境...
+    echo Creating venv...
     python -m venv venv
     call venv\Scripts\activate.bat
-    echo 安装依赖...
+    echo Installing dependencies...
     pip install -r requirements.txt
 ) else (
     call venv\Scripts\activate.bat
@@ -14,6 +13,6 @@ if not exist venv (
 python app.py
 if errorlevel 1 (
     echo.
-    echo 启动失败，请检查上方错误信息
+    echo Failed to start, check the error above.
     pause
 )
