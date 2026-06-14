@@ -1,42 +1,42 @@
 @echo off
-chcp 65001 >nul
+
 echo ========================================
-echo   Excel 智能助手 - Windows 打包脚本
+echo   Excel Assistant - Windows Build
 echo ========================================
 echo.
 
 :: Check Python
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] 未找到 Python，请先安装 Python 3.10+
+    echo [ERROR] Python not found, please install Python 3.10+
     pause
     exit /b 1
 )
 
 :: Create venv
 if not exist venv (
-    echo [1/4] 创建虚拟环境...
+    echo [1/4] Creating venv...
     python -m venv venv
 )
 
 :: Activate and install
-echo [2/4] 安装依赖...
+echo [2/4] Installing dependencies...
 call venv\Scripts\activate.bat
 pip install -r requirements.txt pyinstaller -q
 
 :: Build
-echo [3/4] 打包中（约2-3分钟）...
+echo [3/4] Building (2-3 minutes)...
 pyinstaller excel_assistant.spec --noconfirm
 
 :: Create inputs/outputs in dist
-echo [4/4] 创建目录结构...
-if not exist "dist\Excel智能助手\inputs" mkdir "dist\Excel智能助手\inputs"
-if not exist "dist\Excel智能助手\outputs" mkdir "dist\Excel智能助手\outputs"
+echo [4/4] Creating directories...
+if not exist "dist\ExcelAssistant\inputs" mkdir "dist\ExcelAssistant\inputs"
+if not exist "dist\ExcelAssistant\outputs" mkdir "dist\ExcelAssistant\outputs"
 
 echo.
 echo ========================================
-echo   打包完成！
-echo   输出目录: dist\Excel智能助手\
-echo   双击 Excel智能助手.exe 启动
+echo   Build complete!
+echo   Output: dist\ExcelAssistant\
+echo   Run: ExcelAssistant.exe
 echo ========================================
 pause
