@@ -12,3 +12,8 @@ if not exist venv (
 )
 
 python app.py
+if errorlevel 1 (
+    echo.
+    echo 启动失败，请检查上方错误信息
+    pause
+)
