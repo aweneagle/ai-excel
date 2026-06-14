@@ -127,16 +127,11 @@ OUTPUTS_DIR = "{outputs_dir}"
 FORBIDDEN_PATTERNS = [
     r"\bos\.system\b",
     r"\bsubprocess\b",
-    r"\b__import__\b",
     r"\bexec\s*\(",
     r"\beval\s*\(",
-    r"\bopen\s*\(",
     r"\bcompile\s*\(",
     r"\bglobals\s*\(",
     r"\blocals\s*\(",
-    r"\bgetattr\s*\(",
-    r"\bsetattr\s*\(",
-    r"\bdelattr\s*\(",
     r"\bbreakpoint\s*\(",
 ]
 
@@ -147,27 +142,24 @@ def _check_code_safety(code: str):
             raise ValueError(f"代码包含禁止的操作: {pattern}")
 
 
-def _strip_imports(code: str) -> str:
-    lines = code.split("\n")
-    cleaned = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("import ") or stripped.startswith("from "):
-            continue
-        cleaned.append(line)
-    return "\n".join(cleaned)
+ALLOWED_MODULES = {
+    "pandas", "openpyxl", "openpyxl.utils", "openpyxl.styles",
+    "openpyxl.worksheet", "openpyxl.chart",
+    "datetime", "math", "re", "json", "csv", "collections",
+}
+
+
+def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+    if name not in ALLOWED_MODULES:
+        raise ImportError(f"not allowed to import '{name}'")
+    return __builtins__["__import__"](name, globals, locals, fromlist, level)
 
 
 def execute_code(code: str, inputs_dir: str, outputs_dir: str) -> str:
     _check_code_safety(code)
-    code = _strip_imports(code)
 
-    safe_globals = {"__builtins__": {}}
-    safe_locals = {
-        "pd": pd,
-        "os": _RestrictedOs(inputs_dir, outputs_dir),
-        "INPUTS_DIR": inputs_dir,
-        "OUTPUTS_DIR": outputs_dir,
+    safe_builtins = {
+        "__import__": _safe_import,
         "print": lambda *a, **kw: None,
         "len": len,
         "list": list,
@@ -195,9 +187,20 @@ def execute_code(code: str, inputs_dir: str, outputs_dir: str) -> str:
         "TypeError": TypeError,
         "KeyError": KeyError,
         "IndexError": IndexError,
+        "ImportError": ImportError,
         "Exception": Exception,
         "format": format,
         "repr": repr,
+        "True": True,
+        "False": False,
+        "None": None,
+    }
+    safe_globals = {"__builtins__": safe_builtins}
+    safe_locals = {
+        "pd": pd,
+        "os": _RestrictedOs(inputs_dir, outputs_dir),
+        "INPUTS_DIR": inputs_dir,
+        "OUTPUTS_DIR": outputs_dir,
         "RESULT": "",
     }
 
