@@ -84,6 +84,8 @@ def fix_code(original_code: str, error_msg: str, command: str,
              input_files: list[str], inputs_dir: str, outputs_dir: str) -> str:
     file_list = "\n".join(f"  - {f}" for f in input_files) if input_files else "  (无文件)"
 
+    allowed = ", ".join(sorted(ALLOWED_MODULES))
+
     user_msg = f"""之前生成的代码执行报错了，请修复。
 
 用户原始指令: {command}
@@ -93,6 +95,11 @@ def fix_code(original_code: str, error_msg: str, command: str,
 
 INPUTS_DIR = "{inputs_dir}"
 OUTPUTS_DIR = "{outputs_dir}"
+
+执行环境限制:
+- 只能 import 以下模块: {allowed}
+- 禁止使用 os.system, subprocess, exec, eval
+- os 只能用 os.path.join, os.path.exists, os.path.basename, os.path.splitext, os.listdir
 
 之前生成的代码:
 ```python
