@@ -111,6 +111,7 @@ def execute():
         return jsonify({"error": "请输入指令"}), 400
 
     command = body["command"]
+    deep_thinking = body.get("deep_thinking", False)
 
     input_files = []
     for name in os.listdir(INPUTS_DIR):
@@ -118,7 +119,8 @@ def execute():
             input_files.append(name)
 
     try:
-        code = generate_code(command, input_files, INPUTS_DIR, OUTPUTS_DIR)
+        code = generate_code(command, input_files, INPUTS_DIR, OUTPUTS_DIR,
+                             deep_thinking=deep_thinking)
     except Exception as e:
         return jsonify({"error": f"生成代码失败: {e}"}), 500
 
@@ -141,7 +143,8 @@ def execute():
             if attempt < max_retries - 1:
                 try:
                     code = fix_code(code, error_msg, command,
-                                    input_files, INPUTS_DIR, OUTPUTS_DIR)
+                                    input_files, INPUTS_DIR, OUTPUTS_DIR,
+                                    deep_thinking=deep_thinking)
                 except Exception as fix_err:
                     return jsonify({
                         "error": f"自动纠错失败: {fix_err}",

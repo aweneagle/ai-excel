@@ -109,6 +109,47 @@
             font-size: 13px;
         }
 
+        /* Thinking mode toggle */
+        .mode-switch {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #666;
+        }
+        .mode-switch-track {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            background: #ccc;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.25s;
+        }
+        .mode-switch-track.active {
+            background: #4f6ef7;
+        }
+        .mode-switch-track::after {
+            content: "";
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 0.25s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .mode-switch-track.active::after {
+            transform: translateX(20px);
+        }
+        .mode-label {
+            font-weight: 500;
+            min-width: 56px;
+        }
+        .mode-label.deep { color: #4f6ef7; }
+
         /* Upload area */
         .upload-area {
             border: 2px dashed #ccc;
@@ -324,6 +365,11 @@
                 <input type="text" id="commandInput"
                     placeholder="例如：过滤员工表里薪资大于20000的记录"
                     autocomplete="off">
+                <div class="mode-switch">
+                    <span class="mode-label" id="modeLabel">普通</span>
+                    <div class="mode-switch-track" id="modeToggle" onclick="toggleThinkingMode()"></div>
+                    <span style="color:#999; font-size:12px;">深度思考</span>
+                </div>
                 <div class="retry-input">
                     <span>重试</span>
                     <input type="number" id="retryInput" value="3" min="1" max="10">
@@ -389,6 +435,16 @@
     <script>
         let lastSuccessCode = null;
         let lastSuccessCommand = null;
+        let deepThinking = false;
+
+        function toggleThinkingMode() {
+            deepThinking = !deepThinking;
+            const track = document.getElementById("modeToggle");
+            const label = document.getElementById("modeLabel");
+            track.classList.toggle("active", deepThinking);
+            label.textContent = deepThinking ? "深度" : "普通";
+            label.classList.toggle("deep", deepThinking);
+        }
 
         document.addEventListener("DOMContentLoaded", () => { loadFiles(); loadScripts(); });
 
@@ -485,7 +541,7 @@
                 const resp = await fetch("/api/execute", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ command, max_retries: maxRetries }),
+                    body: JSON.stringify({ command, max_retries: maxRetries, deep_thinking: deepThinking }),
                 });
                 const data = await resp.json();
 

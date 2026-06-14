@@ -19,19 +19,64 @@ def _get_client():
 SYSTEM_PROMPT = """你是一个 Python 数据处理助手。用户会给你一条自然语言指令，要求对 Excel/CSV 文件进行操作。
 
 你必须生成一段可直接执行的 Python 代码，遵循以下规则：
-1. 只能使用 pandas 和 openpyxl 库，不要导入其他库
-2. 输入文件在 INPUTS_DIR 目录下，输出文件保存到 OUTPUTS_DIR 目录下
-3. INPUTS_DIR 和 OUTPUTS_DIR 会作为变量注入，直接使用即可
-4. 输出文件名要有意义，比如 "结果_原文件名.xlsx"
-5. 代码末尾必须将结果摘要赋值给变量 RESULT，这是一个字符串，描述操作结果
-6. 只返回纯 Python 代码，不要包含 markdown 标记或解释文字
-7. 用 pd.read_excel() 读取 .xlsx/.xls，用 pd.read_csv() 读取 .csv
-8. 如果用户指令中提到了具体文件名，用那个文件；如果没指定，根据可用文件列表推断
-9. 禁止使用 os.system, subprocess, exec, eval, __import__, open (用 pandas 的 IO 方法代替)
-10. 禁止访问 INPUTS_DIR 和 OUTPUTS_DIR 之外的任何路径"""
+
+## 执行环境（非常重要，必须严格遵守）
+- 以下变量已预注入，可以直接使用，不需要定义：pd (pandas), os, INPUTS_DIR, OUTPUTS_DIR
+- 允许 import 的库（仅限这些）：numpy, openpyxl, openpyxl.utils, openpyxl.styles, datetime, math, re, json, csv, collections
+- os 模块只有以下 5 个方法可用，调用其他方法会报错：
+  - os.path.join()
+  - os.path.exists()
+  - os.path.basename()
+  - os.path.splitext()
+  - os.listdir()
+- 禁止使用：open(), os.system, os.makedirs, os.rename, os.remove, subprocess, exec, eval
+
+## 文件读写
+- 读取文件：pd.read_excel() 读 .xlsx/.xls，pd.read_csv() 读 .csv
+- 写入文件：df.to_excel() 或 df.to_csv()，不要用 open()
+- 输入文件路径：os.path.join(INPUTS_DIR, 文件名)
+- 输出文件路径：os.path.join(OUTPUTS_DIR, 文件名)
+- 输出文件名要有意义，比如 "结果_原文件名.xlsx"
+
+## 代码规范
+- 如果用户指令中提到了具体文件名，用那个文件；如果没指定，根据可用文件列表推断
+- 代码末尾必须将结果摘要赋值给变量 RESULT，这是一个字符串，描述操作结果
+- 只返回纯 Python 代码，不要包含 markdown 标记或解释文字
+- 禁止访问 INPUTS_DIR 和 OUTPUTS_DIR 之外的任何路径"""
 
 
-def generate_code(command: str, input_files: list[str], inputs_dir: str, outputs_dir: str) -> str:
+def _extract_code(text: str) -> str:
+    text = text.strip()
+    if not text:
+        return ""
+    blocks = re.findall(r"```(?:python)?\n(.*?)```", text, re.DOTALL)
+    if blocks:
+        return max(blocks, key=len).strip()
+    m = re.search(r"```(?:python)?\n(.*)", text, re.DOTALL)
+    if m:
+        return m.group(1).strip()
+    if re.search(r"^(import |pd\.|df[_\s]|RESULT\s*=)", text, re.MULTILINE):
+        return text
+    return ""
+
+
+def _build_api_kwargs(deep_thinking: bool) -> dict:
+    if deep_thinking:
+        return {
+            "model": "deepseek-v4-pro",
+            "max_tokens": 8192,
+            "reasoning_effort": "high",
+            "extra_body": {"thinking": {"type": "enabled"}},
+        }
+    return {
+        "model": "deepseek-chat",
+        "max_tokens": 8192,
+        "temperature": 0,
+    }
+
+
+def generate_code(command: str, input_files: list[str], inputs_dir: str, outputs_dir: str,
+                  *, deep_thinking: bool = False) -> str:
     file_list = "\n".join(f"  - {f}" for f in input_files) if input_files else "  (无文件)"
 
     file_previews = []
@@ -48,9 +93,7 @@ def generate_code(command: str, input_files: list[str], inputs_dir: str, outputs
 
     preview_text = "\n\n".join(file_previews) if file_previews else "无可预览文件"
 
-    user_msg = f"""{SYSTEM_PROMPT}
-
-可用文件列表:
+    user_msg = f"""可用文件列表:
 {file_list}
 
 文件预览:
@@ -61,27 +104,32 @@ OUTPUTS_DIR = "{outputs_dir}"
 
 用户指令: {command}"""
 
+    api_kwargs = _build_api_kwargs(deep_thinking)
     resp = _get_client().chat.completions.create(
-        model="deepseek-reasoner",
         messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_msg},
         ],
-        max_tokens=4096,
+        **api_kwargs,
     )
 
     import sys as _sys
-    print(f"[DeepSeek] model used: {resp.model}", file=_sys.stderr)
+    if deep_thinking:
+        reasoning = getattr(resp.choices[0].message, "reasoning_content", None)
+        if reasoning:
+            print(f"[DeepSeek] thinking: {reasoning[:200]}...", file=_sys.stderr)
+    print(f"[DeepSeek] model={resp.model} deep_thinking={deep_thinking}", file=_sys.stderr)
 
-    code = resp.choices[0].message.content.strip()
-    if code.startswith("```"):
-        code = re.sub(r"^```(?:python)?\n?", "", code)
-        code = re.sub(r"\n?```$", "", code)
+    code = _extract_code(resp.choices[0].message.content or "")
+    if not code:
+        raise ValueError("AI 未返回有效代码")
 
     return code
 
 
 def fix_code(original_code: str, error_msg: str, command: str,
-             input_files: list[str], inputs_dir: str, outputs_dir: str) -> str:
+             input_files: list[str], inputs_dir: str, outputs_dir: str,
+             *, deep_thinking: bool = False) -> str:
     file_list = "\n".join(f"  - {f}" for f in input_files) if input_files else "  (无文件)"
 
     allowed = ", ".join(sorted(ALLOWED_MODULES))
@@ -111,22 +159,18 @@ OUTPUTS_DIR = "{outputs_dir}"
 
 请修复代码并返回完整的可执行代码。"""
 
-    fix_msg = f"""{SYSTEM_PROMPT}
-
-{user_msg}"""
-
+    api_kwargs = _build_api_kwargs(deep_thinking)
     resp = _get_client().chat.completions.create(
-        model="deepseek-reasoner",
         messages=[
-            {"role": "user", "content": fix_msg},
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_msg},
         ],
-        max_tokens=4096,
+        **api_kwargs,
     )
 
-    code = resp.choices[0].message.content.strip()
-    if code.startswith("```"):
-        code = re.sub(r"^```(?:python)?\n?", "", code)
-        code = re.sub(r"\n?```$", "", code)
+    code = _extract_code(resp.choices[0].message.content or "")
+    if not code:
+        raise ValueError("AI 未返回有效修复代码")
 
     return code
 
@@ -150,23 +194,28 @@ def _check_code_safety(code: str):
 
 
 ALLOWED_MODULES = {
-    "pandas", "openpyxl", "openpyxl.utils", "openpyxl.styles",
+    "pandas", "numpy", "copy", "openpyxl", "openpyxl.utils", "openpyxl.styles",
     "openpyxl.worksheet", "openpyxl.chart",
     "datetime", "math", "re", "json", "csv", "collections",
 }
 
 
-def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
-    if name not in ALLOWED_MODULES:
-        raise ImportError(f"not allowed to import '{name}'")
-    return __builtins__["__import__"](name, globals, locals, fromlist, level)
+def _make_safe_import(restricted_os):
+    def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name in ("os", "os.path"):
+            return restricted_os
+        if name not in ALLOWED_MODULES:
+            raise ImportError(f"not allowed to import '{name}'")
+        return __builtins__["__import__"](name, globals, locals, fromlist, level)
+    return _safe_import
 
 
 def execute_code(code: str, inputs_dir: str, outputs_dir: str) -> str:
     _check_code_safety(code)
 
+    restricted_os = _RestrictedOs(inputs_dir, outputs_dir)
     safe_builtins = {
-        "__import__": _safe_import,
+        "__import__": _make_safe_import(restricted_os),
         "print": lambda *a, **kw: None,
         "len": len,
         "list": list,
@@ -183,6 +232,8 @@ def execute_code(code: str, inputs_dir: str, outputs_dir: str) -> str:
         "map": map,
         "filter": filter,
         "sorted": sorted,
+        "all": all,
+        "any": any,
         "sum": sum,
         "min": min,
         "max": max,
@@ -202,12 +253,14 @@ def execute_code(code: str, inputs_dir: str, outputs_dir: str) -> str:
         "False": False,
         "None": None,
     }
-    safe_globals = {"__builtins__": safe_builtins}
-    safe_locals = {
+    safe_globals = {
+        "__builtins__": safe_builtins,
         "pd": pd,
-        "os": _RestrictedOs(inputs_dir, outputs_dir),
+        "os": restricted_os,
         "INPUTS_DIR": inputs_dir,
         "OUTPUTS_DIR": outputs_dir,
+    }
+    safe_locals = {
         "RESULT": "",
     }
 
