@@ -5,7 +5,7 @@ import traceback
 from flask import Flask, request, jsonify, render_template, send_from_directory
 from dotenv import load_dotenv
 
-from executor import generate_code, execute_code, preview_excel
+from executor import generate_code, execute_code, fix_code, preview_excel
 
 
 def _get_base_dir():
@@ -119,21 +119,38 @@ def execute():
     except Exception as e:
         return jsonify({"error": f"生成代码失败: {e}"}), 500
 
-    try:
-        result = execute_code(code, INPUTS_DIR, OUTPUTS_DIR)
-    except Exception as e:
-        tb = traceback.format_exc()
-        return jsonify({
-            "error": f"执行失败: {e}",
-            "code": code,
-            "traceback": tb,
-        }), 500
+    max_retries = 5
+    attempts = []
+    for attempt in range(max_retries):
+        try:
+            result = execute_code(code, INPUTS_DIR, OUTPUTS_DIR)
+            return jsonify({
+                "message": "执行成功",
+                "code": code,
+                "result": result,
+                "attempts": len(attempts) + 1,
+                "retry_history": attempts if attempts else None,
+            })
+        except Exception as e:
+            error_msg = traceback.format_exc()
+            attempts.append({"code": code, "error": str(e)})
+
+            if attempt < max_retries - 1:
+                try:
+                    code = fix_code(code, error_msg, command,
+                                    input_files, INPUTS_DIR, OUTPUTS_DIR)
+                except Exception as fix_err:
+                    return jsonify({
+                        "error": f"自动纠错失败: {fix_err}",
+                        "code": code,
+                        "attempts": attempts,
+                    }), 500
 
     return jsonify({
-        "message": "执行成功",
+        "error": f"重试 {max_retries} 次后仍然失败",
         "code": code,
-        "result": result,
-    })
+        "attempts": attempts,
+    }), 500
 
 
 if __name__ == "__main__":

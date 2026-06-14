@@ -284,6 +284,7 @@
             <div class="panel-title">执行结果</div>
             <div class="result-box" id="resultBox">
                 <div class="result-message" id="resultMessage"></div>
+                <div id="retryInfo" style="display:none; font-size:13px; color:#888; margin-bottom:10px;"></div>
                 <div class="code-toggle" id="codeToggle" onclick="toggleCode()">▶ 查看生成的代码</div>
                 <div class="code-block" id="codeBlock" style="display:none;"></div>
             </div>
@@ -383,11 +384,13 @@
             const codeBlock = document.getElementById("codeBlock");
             const codeToggle = document.getElementById("codeToggle");
             document.getElementById("resultPlaceholder").style.display = "none";
+            const retryInfo = document.getElementById("retryInfo");
             resultBox.classList.add("visible");
             resultMsg.textContent = "正在调用 AI 生成代码并执行...";
             resultMsg.className = "result-message";
             codeBlock.style.display = "none";
             codeToggle.textContent = "▶ 查看生成的代码";
+            retryInfo.style.display = "none";
 
             try {
                 const resp = await fetch("/api/execute", {
@@ -398,11 +401,19 @@
                 const data = await resp.json();
 
                 if (resp.ok) {
-                    resultMsg.textContent = "✅ " + (data.result || data.message);
+                    let msg = "✅ " + (data.result || data.message);
+                    if (data.attempts > 1) msg += ` (第${data.attempts}次尝试成功)`;
+                    resultMsg.textContent = msg;
                     resultMsg.className = "result-message success";
                 } else {
                     resultMsg.textContent = "❌ " + (data.error || "执行失败");
                     resultMsg.className = "result-message error";
+                }
+                if (data.attempts > 1 && data.retry_history) {
+                    retryInfo.innerHTML = data.retry_history
+                        .map((a, i) => `<div style="margin-bottom:6px;">第${i+1}次失败: ${esc(a.error)}</div>`)
+                        .join("");
+                    retryInfo.style.display = "block";
                 }
                 if (data.code) {
                     codeBlock.textContent = data.code;

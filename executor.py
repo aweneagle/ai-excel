@@ -77,6 +77,48 @@ OUTPUTS_DIR = "{outputs_dir}"
     return code
 
 
+def fix_code(original_code: str, error_msg: str, command: str,
+             input_files: list[str], inputs_dir: str, outputs_dir: str) -> str:
+    file_list = "\n".join(f"  - {f}" for f in input_files) if input_files else "  (无文件)"
+
+    user_msg = f"""之前生成的代码执行报错了，请修复。
+
+用户原始指令: {command}
+
+可用文件列表:
+{file_list}
+
+INPUTS_DIR = "{inputs_dir}"
+OUTPUTS_DIR = "{outputs_dir}"
+
+之前生成的代码:
+```python
+{original_code}
+```
+
+执行报错信息:
+{error_msg}
+
+请修复代码并返回完整的可执行代码。"""
+
+    resp = _get_client().chat.completions.create(
+        model="deepseek-coder",
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_msg},
+        ],
+        temperature=0,
+        max_tokens=4096,
+    )
+
+    code = resp.choices[0].message.content.strip()
+    if code.startswith("```"):
+        code = re.sub(r"^```(?:python)?\n?", "", code)
+        code = re.sub(r"\n?```$", "", code)
+
+    return code
+
+
 FORBIDDEN_PATTERNS = [
     r"\bos\.system\b",
     r"\bsubprocess\b",
