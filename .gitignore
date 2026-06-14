@@ -6,3 +6,4 @@ outputs/*
 !inputs/.gitkeep
 !outputs/.gitkeep
 venv/
+scripts
