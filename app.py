@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import traceback
@@ -23,9 +24,11 @@ app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"),
 
 INPUTS_DIR = os.path.join(BASE_DIR, "inputs")
 OUTPUTS_DIR = os.path.join(BASE_DIR, "outputs")
+SCRIPTS_DIR = os.path.join(BASE_DIR, "scripts")
 
 os.makedirs(INPUTS_DIR, exist_ok=True)
 os.makedirs(OUTPUTS_DIR, exist_ok=True)
+os.makedirs(SCRIPTS_DIR, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 
@@ -119,7 +122,7 @@ def execute():
     except Exception as e:
         return jsonify({"error": f"生成代码失败: {e}"}), 500
 
-    max_retries = 5
+    max_retries = min(int(body.get("max_retries", 3)), 10)
     attempts = []
     for attempt in range(max_retries):
         try:
@@ -143,14 +146,75 @@ def execute():
                     return jsonify({
                         "error": f"自动纠错失败: {fix_err}",
                         "code": code,
-                        "attempts": attempts,
+                        "retry_history": attempts,
                     }), 500
 
     return jsonify({
         "error": f"重试 {max_retries} 次后仍然失败",
         "code": code,
-        "attempts": attempts,
+        "retry_history": attempts,
     }), 500
+
+
+@app.route("/api/scripts", methods=["GET"])
+def list_scripts():
+    scripts = []
+    for name in sorted(os.listdir(SCRIPTS_DIR)):
+        if name.endswith(".json"):
+            filepath = os.path.join(SCRIPTS_DIR, name)
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            scripts.append({
+                "id": name[:-5],
+                "name": data.get("name", ""),
+                "command": data.get("command", ""),
+            })
+    return jsonify(scripts)
+
+
+@app.route("/api/scripts", methods=["POST"])
+def save_script():
+    body = request.get_json()
+    if not body or not body.get("name") or not body.get("code"):
+        return jsonify({"error": "name 和 code 不能为空"}), 400
+
+    script_id = body["name"].replace(" ", "_")
+    filepath = os.path.join(SCRIPTS_DIR, f"{script_id}.json")
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump({
+            "name": body["name"],
+            "command": body.get("command", ""),
+            "code": body["code"],
+        }, f, ensure_ascii=False, indent=2)
+    return jsonify({"message": f"脚本 '{body['name']}' 已保存", "id": script_id})
+
+
+@app.route("/api/scripts/<script_id>", methods=["DELETE"])
+def delete_script(script_id):
+    filepath = os.path.join(SCRIPTS_DIR, f"{script_id}.json")
+    if not os.path.isfile(filepath):
+        return jsonify({"error": "脚本不存在"}), 404
+    os.remove(filepath)
+    return jsonify({"message": "已删除"})
+
+
+@app.route("/api/scripts/<script_id>/run", methods=["POST"])
+def run_script(script_id):
+    filepath = os.path.join(SCRIPTS_DIR, f"{script_id}.json")
+    if not os.path.isfile(filepath):
+        return jsonify({"error": "脚本不存在"}), 404
+
+    with open(filepath, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    code = data["code"]
+    try:
+        result = execute_code(code, INPUTS_DIR, OUTPUTS_DIR)
+    except Exception as e:
+        tb = traceback.format_exc()
+        return jsonify({"error": f"执行失败: {e}", "code": code, "traceback": tb}), 500
+
+    return jsonify({"message": "执行成功", "code": code, "result": result})
 
 
 if __name__ == "__main__":

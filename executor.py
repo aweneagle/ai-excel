@@ -48,7 +48,9 @@ def generate_code(command: str, input_files: list[str], inputs_dir: str, outputs
 
     preview_text = "\n\n".join(file_previews) if file_previews else "无可预览文件"
 
-    user_msg = f"""可用文件列表:
+    user_msg = f"""{SYSTEM_PROMPT}
+
+可用文件列表:
 {file_list}
 
 文件预览:
@@ -60,14 +62,15 @@ OUTPUTS_DIR = "{outputs_dir}"
 用户指令: {command}"""
 
     resp = _get_client().chat.completions.create(
-        model="deepseek-coder",
+        model="deepseek-reasoner",
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_msg},
         ],
-        temperature=0,
         max_tokens=4096,
     )
+
+    import sys as _sys
+    print(f"[DeepSeek] model used: {resp.model}", file=_sys.stderr)
 
     code = resp.choices[0].message.content.strip()
     if code.startswith("```"):
@@ -101,13 +104,15 @@ OUTPUTS_DIR = "{outputs_dir}"
 
 请修复代码并返回完整的可执行代码。"""
 
+    fix_msg = f"""{SYSTEM_PROMPT}
+
+{user_msg}"""
+
     resp = _get_client().chat.completions.create(
-        model="deepseek-coder",
+        model="deepseek-reasoner",
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_msg},
+            {"role": "user", "content": fix_msg},
         ],
-        temperature=0,
         max_tokens=4096,
     )
 
