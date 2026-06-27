@@ -17,6 +17,8 @@ def _get_resource_dir():
 
 def _get_data_dir():
     if getattr(sys, "frozen", False):
+        if sys.platform == "darwin":
+            return os.path.join(os.path.expanduser("~"), "Documents", "ExcelAssistant")
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
 
@@ -270,11 +272,28 @@ def run_script(script_id):
 if __name__ == "__main__":
     import webbrowser
     import threading
+    import time
+    import signal
 
     is_frozen = getattr(sys, "frozen", False)
     port = 5001
 
     if is_frozen:
+        _last_heartbeat = time.time()
+
+        @app.route("/api/heartbeat")
+        def heartbeat():
+            global _last_heartbeat
+            _last_heartbeat = time.time()
+            return jsonify({"status": "ok"})
+
+        def _watchdog():
+            while True:
+                time.sleep(30)
+                if time.time() - _last_heartbeat > 120:
+                    os.kill(os.getpid(), signal.SIGTERM)
+
+        threading.Thread(target=_watchdog, daemon=True).start()
         threading.Timer(1.5, lambda: webbrowser.open(f"http://localhost:{port}")).start()
 
     app.run(debug=not is_frozen, port=port)

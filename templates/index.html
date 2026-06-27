@@ -767,6 +767,8 @@
             d.textContent = s;
             return d.innerHTML;
         }
+
+        setInterval(() => fetch("/api/heartbeat").catch(() => {}), 30000);
     </script>
 </body>
 </html>
