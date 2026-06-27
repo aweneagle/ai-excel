@@ -11,7 +11,7 @@ from executor import generate_code, execute_code, fix_code, preview_excel, match
 
 def _get_base_dir():
     if getattr(sys, "frozen", False):
-        return os.path.dirname(sys.executable)
+        return sys._MEIPASS
     return os.path.dirname(os.path.abspath(__file__))
 
 
