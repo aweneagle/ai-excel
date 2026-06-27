@@ -24,6 +24,7 @@ def _get_data_dir():
 RESOURCE_DIR = _get_resource_dir()
 DATA_DIR = _get_data_dir()
 
+load_dotenv(os.path.join(DATA_DIR, ".env"))
 load_dotenv(os.path.join(RESOURCE_DIR, ".env"))
 
 app = Flask(__name__, template_folder=os.path.join(RESOURCE_DIR, "templates"),
