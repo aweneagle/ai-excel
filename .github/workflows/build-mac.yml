@@ -28,8 +28,18 @@ jobs:
         run: |
           pyinstaller --clean --noconfirm excel_assistant.spec
 
+      - name: Ad-hoc code sign
+        run: |
+          find dist/ExcelAssistant.app -type f \( -name '*.dylib' -o -name '*.so' -o -name '*.o' \) -exec codesign --force --sign - {} \;
+          codesign --force --deep --sign - dist/ExcelAssistant.app
+
+      - name: Create zip with ditto
+        run: |
+          cd dist
+          ditto -c -k --sequesterRsrc --keepParent ExcelAssistant.app ExcelAssistant.app.zip
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ExcelAssistantMacApp
-          path: dist/ExcelAssistant.app
+          path: dist/ExcelAssistant.app.zip
