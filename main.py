@@ -6,7 +6,7 @@ import traceback
 from flask import Flask, request, jsonify, render_template, send_from_directory
 from dotenv import load_dotenv
 
-from executor import generate_code, execute_code, fix_code, preview_excel
+from executor import generate_code, execute_code, fix_code, preview_excel, match_script_filenames
 
 
 def _get_base_dir():
@@ -64,6 +64,39 @@ def list_files():
         if not name.startswith("."):
             result["outputs"].append(name)
     return jsonify(result)
+
+
+@app.route("/api/import_api_key", methods=["POST"])
+def import_api_key():
+    body = request.get_json()
+    if not body or not body.get("key"):
+        return jsonify({"error": "API Key 不能为空"}), 400
+
+    key = body["key"].strip()
+    if not key:
+        return jsonify({"error": "API Key 不能为空"}), 400
+
+    env_path = os.path.join(BASE_DIR, ".env")
+    lines = []
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+    updated = False
+    for idx, line in enumerate(lines):
+        if line.strip().startswith("DEEPSEEK_API_KEY="):
+            lines[idx] = f"DEEPSEEK_API_KEY={key}\n"
+            updated = True
+            break
+
+    if not updated:
+        lines.append(f"DEEPSEEK_API_KEY={key}\n")
+
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+    os.environ["DEEPSEEK_API_KEY"] = key
+    return jsonify({"message": "DeepSeek API Key 已保存"})
 
 
 @app.route("/api/download/<folder>/<filename>")
@@ -211,6 +244,12 @@ def run_script(script_id):
         data = json.load(f)
 
     code = data["code"]
+    input_files = [name for name in os.listdir(INPUTS_DIR) if not name.startswith('.')]
+    try:
+        code = match_script_filenames(code, input_files, INPUTS_DIR, OUTPUTS_DIR)
+    except Exception as e:
+        return jsonify({"error": f"脚本文件名匹配失败: {e}", "code": code}), 500
+
     try:
         result = execute_code(code, INPUTS_DIR, OUTPUTS_DIR)
     except Exception as e:

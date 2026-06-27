@@ -1,19 +1,25 @@
 import os
 import re
+import sys
 
 import pandas as pd
 from openai import OpenAI
 
 _client = None
+_current_deepseek_api_key = None
 
 
 def _get_client():
-    global _client
-    if _client is None:
+    global _client, _current_deepseek_api_key
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if _client is None or _current_deepseek_api_key != api_key:
+        truncated = api_key[:5] + "..." if api_key else "(empty)"
+        print(f"[DeepSeek] using api_key={truncated}", file=sys.stderr)
         _client = OpenAI(
-            api_key=os.getenv("DEEPSEEK_API_KEY"),
+            api_key=api_key,
             base_url="https://api.deepseek.com",
         )
+        _current_deepseek_api_key = api_key
     return _client
 
 SYSTEM_PROMPT = """你是一个 Python 数据处理助手。用户会给你一条自然语言指令，要求对 Excel/CSV 文件进行操作。
@@ -182,6 +188,46 @@ OUTPUTS_DIR = "{outputs_dir}"
         raise ValueError("AI 未返回有效修复代码")
 
     return code
+
+
+def match_script_filenames(code: str, input_files: list[str], inputs_dir: str, outputs_dir: str) -> str:
+    if not input_files:
+        return code
+
+    file_list = "\n".join(f"  - {f}" for f in input_files)
+    user_msg = f"""你将收到一段 Python 脚本，脚本中可能包含具体的输入文件名和输出文件名。
+
+当前可用输入文件:
+{file_list}
+
+请根据当前可用输入文件，自动调整脚本中的文件路径，使脚本在当前 INPUTS_DIR 和 OUTPUTS_DIR 下可执行。
+- 保持原始数据处理逻辑不变。
+- 只修改或替换文件名和文件路径，不改变其他代码。
+- 输入文件必须来自当前可用输入文件列表。
+- 输出文件仍然写入 OUTPUTS_DIR，并尽量使用合理的输出文件名。
+- 如果脚本使用了旧输入文件名，请替换为最匹配的当前输入文件名。
+- 不要添加额外解释或 markdown，只返回完整 Python 代码。
+
+脚本代码:
+```python
+{code}
+```
+"""
+
+    api_kwargs = _build_api_kwargs(False)
+    resp = _get_client().chat.completions.create(
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_msg},
+        ],
+        **api_kwargs,
+    )
+
+    matched_code = _extract_code(resp.choices[0].message.content or "")
+    if not matched_code:
+        raise ValueError("AI 未返回有效的匹配脚本代码")
+
+    return matched_code
 
 
 FORBIDDEN_PATTERNS = [

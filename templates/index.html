@@ -357,6 +357,10 @@
 <body>
     <div class="container">
         <h1>📊 Excel 智能助手</h1>
+        <div style="margin: 16px 0; display: flex; gap: 10px; align-items: center;">
+            <button class="btn btn-secondary btn-sm" type="button" onclick="promptImportApiKey()">导入 API Key</button>
+            <span style="color:#666; font-size:13px;">可用于保存 DeepSeek API Key 到 .env</span>
+        </div>
 
         <!-- Command -->
         <div class="panel">
@@ -436,6 +440,23 @@
         let lastSuccessCode = null;
         let lastSuccessCommand = null;
         let deepThinking = false;
+
+        async function promptImportApiKey() {
+            const key = prompt("请输入 DeepSeek API Key：");
+            if (!key) return;
+
+            const resp = await fetch("/api/import_api_key", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ key }),
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                alert(data.message || "API Key 已保存");
+            } else {
+                alert(data.error || "保存 API Key 失败");
+            }
+        }
 
         function toggleThinkingMode() {
             deepThinking = !deepThinking;
