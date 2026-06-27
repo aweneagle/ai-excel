@@ -10,7 +10,7 @@ $(VENV):
 .PHONY: run clean
 
 run: $(VENV)
-	$(PYTHON) app.py
+	$(PYTHON) main.py
 
 clean:
 	rm -rf $(VENV) __pycache__
