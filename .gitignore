@@ -7,3 +7,7 @@ outputs/*
 !outputs/.gitkeep
 venv/
 scripts
+.env.bk
+.venv
+build
+dist

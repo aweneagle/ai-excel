@@ -1,22 +1,25 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
+import sys
+from PyInstaller.building.build_main import Analysis, PYZ, EXE, COLLECT, BUNDLE
 
 block_cipher = None
+base_dir = os.path.abspath('.')
 
-a = Analysis(
-    ['app.py'],
-    pathex=[],
+datas = []
+if os.path.isdir(os.path.join(base_dir, 'templates')):
+    datas.append(('templates', 'templates'))
+if os.path.exists(os.path.join(base_dir, '.env')):
+    datas.append(('.env', '.'))
+
+hiddenimports = ['openpyxl', 'pandas', 'openai']
+
+analysis = Analysis(
+    ['main.py'],
+    pathex=[base_dir],
     binaries=[],
-    datas=[
-        ('templates', 'templates'),
-        ('static', 'static'),
-        ('.env', '.'),
-    ],
-    hiddenimports=[
-        'openpyxl',
-        'pandas',
-        'openai',
-    ],
+    datas=datas,
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -27,29 +30,39 @@ a = Analysis(
     noarchive=False,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(analysis.pure, analysis.zipped_data, cipher=block_cipher)
 
 exe = EXE(
     pyz,
-    a.scripts,
+    analysis.scripts,
     [],
     exclude_binaries=True,
-    name='Excel智能助手',
+    name='ExcelAssistant',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    console=True,
-    icon=None,
+    upx=False,
+    console=False,
 )
 
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='Excel智能助手',
-)
+if sys.platform == 'darwin':
+    app = BUNDLE(
+        exe,
+        analysis.binaries,
+        analysis.zipfiles,
+        analysis.datas,
+        strip=False,
+        upx=False,
+        name='ExcelAssistant.app',
+    )
+    coll = app
+else:
+    coll = COLLECT(
+        exe,
+        analysis.binaries,
+        analysis.zipfiles,
+        analysis.datas,
+        strip=False,
+        upx=False,
+        name='ExcelAssistant',
+    )
