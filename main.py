@@ -9,22 +9,29 @@ from dotenv import load_dotenv
 from executor import generate_code, execute_code, fix_code, preview_excel, match_script_filenames
 
 
-def _get_base_dir():
+def _get_resource_dir():
     if getattr(sys, "frozen", False):
         return sys._MEIPASS
     return os.path.dirname(os.path.abspath(__file__))
 
 
-BASE_DIR = _get_base_dir()
+def _get_data_dir():
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
 
-load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"),
-            static_folder=os.path.join(BASE_DIR, "static"))
+RESOURCE_DIR = _get_resource_dir()
+DATA_DIR = _get_data_dir()
 
-INPUTS_DIR = os.path.join(BASE_DIR, "inputs")
-OUTPUTS_DIR = os.path.join(BASE_DIR, "outputs")
-SCRIPTS_DIR = os.path.join(BASE_DIR, "scripts")
+load_dotenv(os.path.join(RESOURCE_DIR, ".env"))
+
+app = Flask(__name__, template_folder=os.path.join(RESOURCE_DIR, "templates"),
+            static_folder=os.path.join(RESOURCE_DIR, "static"))
+
+INPUTS_DIR = os.path.join(DATA_DIR, "inputs")
+OUTPUTS_DIR = os.path.join(DATA_DIR, "outputs")
+SCRIPTS_DIR = os.path.join(DATA_DIR, "scripts")
 
 os.makedirs(INPUTS_DIR, exist_ok=True)
 os.makedirs(OUTPUTS_DIR, exist_ok=True)
@@ -76,7 +83,7 @@ def import_api_key():
     if not key:
         return jsonify({"error": "API Key 不能为空"}), 400
 
-    env_path = os.path.join(BASE_DIR, ".env")
+    env_path = os.path.join(DATA_DIR, ".env")
     lines = []
     if os.path.exists(env_path):
         with open(env_path, "r", encoding="utf-8") as f:
